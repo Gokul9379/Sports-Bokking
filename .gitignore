@@ -1,13 +1,54 @@
-# Backend
+# -------------------------
+# Node Modules
+# -------------------------
+node_modules/
 backend/node_modules/
-backend/.env
-backend/uploads/
-
-# Frontend
 frontend/node_modules/
+
+# -------------------------
+# Environment Files
+# -------------------------
+.env
+backend/.env
+frontend/.env
+
+# -------------------------
+# Build Outputs
+# -------------------------
+backend/dist/
 frontend/build/
 
-# General
+# -------------------------
+# Logs
+# -------------------------
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# -------------------------
+# System Files
+# -------------------------
 .DS_Store
-.env
-npm-debug.log
+Thumbs.db
+
+# -------------------------
+# Editor Settings
+# -------------------------
+.vscode/
+.idea/
+*.swp
+
+# -------------------------
+# Cache
+# -------------------------
+frontend/.cache/
+*.tsbuildinfo
+
+# -------------------------
+# Misc
+# -------------------------
+*.env.local
+*.env.development
+*.env.production
