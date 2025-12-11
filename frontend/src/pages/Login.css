@@ -1,0 +1,145 @@
+/* src/pages/Login.css - classic/simple look */
+:root{
+  --bg:#f2efe9;
+  --panel:#fff;
+  --muted:#6b6b6b;
+  --accent:#0b5ed7;
+  --accent-2:#0a58ca;
+  --danger:#c0392b;
+}
+
+html,body,#root{
+  height:100%;
+  margin:0;
+  font-family: "Georgia", "Times New Roman", serif;
+  background: radial-gradient(circle at 10% 10%, #f7f5f0, var(--bg));
+  color:#222;
+}
+
+.login-wrap{
+  min-height:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:48px 20px;
+}
+
+/* card */
+.login-card{
+  width:420px;
+  background:var(--panel);
+  border:1px solid rgba(0,0,0,0.06);
+  box-shadow: 0 8px 28px rgba(20,20,20,0.08);
+  padding:28px;
+  border-radius:8px;
+  text-align:left;
+}
+
+/* header */
+.login-header{
+  text-align:center;
+  margin-bottom:18px;
+}
+.login-logo{
+  width:48px;
+  height:48px;
+  border-radius:8px;
+  display:inline-block;
+  margin-bottom:6px;
+  opacity:0.95;
+}
+.login-title{
+  margin:0;
+  font-size:22px;
+  letter-spacing:0.2px;
+}
+.login-sub{
+  margin:6px 0 0 0;
+  color:var(--muted);
+  font-size:13px;
+}
+
+/* error */
+.login-error{
+  background: #fdecea;
+  color: var(--danger);
+  padding:10px 12px;
+  border-radius:6px;
+  border:1px solid rgba(192,57,43,0.1);
+  margin-bottom:12px;
+  font-size:13px;
+}
+
+/* form */
+.login-form{
+  display:block;
+}
+.label-inline{
+  display:block;
+  margin-bottom:12px;
+}
+.label-text{
+  display:block;
+  font-size:13px;
+  color:var(--muted);
+  margin-bottom:6px;
+}
+.text-input{
+  width:100%;
+  padding:10px 12px;
+  border:1px solid rgba(0,0,0,0.08);
+  background:linear-gradient(#fff,#fbfbfb);
+  border-radius:6px;
+  font-size:15px;
+  box-sizing:border-box;
+  outline:none;
+}
+.text-input:focus{
+  border-color:rgba(10,88,202,0.9);
+  box-shadow:0 0 0 3px rgba(10,88,202,0.06);
+}
+
+/* actions */
+.login-actions{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  margin-top:12px;
+}
+.btn-primary{
+  background:linear-gradient(180deg,var(--accent),var(--accent-2));
+  color:white;
+  padding:10px 14px;
+  border-radius:6px;
+  border:none;
+  cursor:pointer;
+  font-weight:600;
+}
+.btn-primary[disabled]{
+  opacity:0.6;
+  cursor:default;
+}
+.btn-link{
+  background:transparent;
+  border:none;
+  color:var(--accent-2);
+  cursor:pointer;
+  font-size:14px;
+  text-decoration:underline;
+  padding:6px;
+}
+
+/* hint & footer */
+.login-hint{
+  margin-top:12px;
+  color:var(--muted);
+  font-size:13px;
+  border-top:1px dashed rgba(0,0,0,0.03);
+  padding-top:12px;
+}
+.login-footer{
+  margin-top:14px;
+  text-align:center;
+  color:var(--muted);
+  font-size:12px;
+}
