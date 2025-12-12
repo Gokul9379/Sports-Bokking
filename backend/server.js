@@ -8,9 +8,21 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/sports_booking';
 
+// allow frontend origin(s)
 app.use(cors({ origin: process.env.FRONTEND_ORIGIN || 'http://localhost:3000', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// add no-cache headers for API responses to avoid stale JSON / 304s being served by proxies/CDNs
+app.use((req, res, next) => {
+  // apply to API paths (you can broaden/narrow this as needed)
+  // we set for any route that looks like an API endpoint or JSON response
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+  next();
+});
 
 if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => { console.log(`${req.method} ${req.path}`); next(); });

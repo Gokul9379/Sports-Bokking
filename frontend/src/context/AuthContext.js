@@ -1,7 +1,7 @@
 // src/context/AuthContext.js
 import React, { createContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api"; // small axios wrapper (see below)
+import api from "../services/api";
 
 export const AuthContext = createContext({
   user: null,
@@ -21,7 +21,6 @@ export function AuthProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
 
-  // keep axios auth header in sync
   useEffect(() => {
     if (token) {
       api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -30,7 +29,6 @@ export function AuthProvider({ children }) {
     }
   }, [token]);
 
-  // persist token & user
   useEffect(() => {
     if (token) localStorage.setItem("token", token);
     else localStorage.removeItem("token");
@@ -41,7 +39,6 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem("user");
   }, [user]);
 
-  // Try to hydrate user on mount if token exists
   useEffect(() => {
     async function hydrate() {
       const t = localStorage.getItem("token");
@@ -51,15 +48,12 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        // ensure api header is set for this request
         api.defaults.headers.common["Authorization"] = `Bearer ${t}`;
-        // try to fetch current user from backend (adjust path if needed)
         const res = await api.get("/auth/me");
         const me = res?.data?.user ?? res?.data;
         setUser(me || null);
         setToken(t);
       } catch (err) {
-        // token might be invalid or request failed — clear it
         console.warn("Failed to fetch current user:", err?.response?.data || err.message || err);
         setUser(null);
         setToken(null);
@@ -73,7 +67,6 @@ export function AuthProvider({ children }) {
     hydrate();
   }, []);
 
-  // legacy helper used elsewhere in your code
   function loginSuccess({ token: newToken, user: newUser }) {
     if (newToken) {
       setToken(newToken);
@@ -86,12 +79,10 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // new helper that posts credentials and sets token+user
   async function loginUser(email, password) {
     setLoading(true);
     try {
       const res = await api.post("/auth/login", { email, password });
-      // Support responses like { token, user } or { token: 'x', user: {...} } etc
       const tokenFromRes = res?.data?.token ?? res?.data?.accessToken;
       const userFromRes = res?.data?.user ?? res?.data;
       if (tokenFromRes) {
@@ -108,11 +99,10 @@ export function AuthProvider({ children }) {
       return { ok: true, user: userFromRes, token: tokenFromRes };
     } catch (err) {
       setLoading(false);
-      throw err; // let caller handle
+      throw err;
     }
   }
 
-  // new helper to register a user then optionally log them in
   async function registerUser(payload) {
     setLoading(true);
     try {
@@ -138,7 +128,6 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // logout (keeps the name you used previously)
   function logout(redirectTo = "/login") {
     setToken(null);
     setUser(null);
@@ -171,5 +160,4 @@ export function AuthProvider({ children }) {
   );
 }
 
-// default export so older import styles continue to work
 export default AuthProvider;

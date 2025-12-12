@@ -3,9 +3,8 @@ import React, { useEffect, useState, useContext } from "react";
 import api from "../services/api";
 import { AuthContext } from "../context/AuthContext";
 import { formatINR } from "../utils/format";
-// If you placed a placeholder under src/images:
+// If you placed a placeholder under public/images:
 const placeholder = "/images/stadium-placeholder.jpg";
-
 
 export default function MyBookings() {
   const { user } = useContext(AuthContext);
@@ -20,13 +19,14 @@ export default function MyBookings() {
       setLoading(true);
       setError(null);
       try {
-        if (!user?.id) {
+        if (!user?.id && !user?._id) {
           setBookings([]);
           setLoading(false);
           return;
         }
-        const res = await api.get(`/bookings/user/${user.id}`);
-        if (mounted) setBookings(res.data);
+        const userId = user.id || user._id;
+        const res = await api.get(`/bookings/user/${userId}`);
+        if (mounted) setBookings(res.data || []);
       } catch (err) {
         console.error("Failed to load bookings", err);
         setError(err?.response?.data?.error || err.message || "Failed to load");
@@ -143,10 +143,17 @@ export default function MyBookings() {
   async function cancelBooking(bookingId) {
     if (!window.confirm("Cancel this booking?")) return;
     setActionLoading(bookingId);
+
+    // optimistic remove
+    const prev = bookings;
+    setBookings(bs => bs.filter(b => b._id !== bookingId));
+
     try {
-      
-      setBookings(bs => bs.filter(b => b._id !== bookingId));
+      await api.delete(`/bookings/${bookingId}`);
+      // success, backend returns cancelled booking
     } catch (err) {
+      // revert on failure and show error
+      setBookings(prev);
       alert(err?.response?.data?.error || err.message || "Failed to cancel");
     } finally {
       setActionLoading(null);

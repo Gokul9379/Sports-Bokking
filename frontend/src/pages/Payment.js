@@ -1,7 +1,8 @@
 // src/pages/Payment.js
 import React, { useState, useContext, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-
+import axios from "axios";
+import api from "../services/api"; // if you have an axios instance set up
 import { AuthContext } from "../context/AuthContext";
 import { formatINR } from "../utils/format";
 
@@ -37,11 +38,11 @@ export default function PaymentPage() {
     if (!bookingPayload) {
       // If no payload, redirect back to courts (safeguard)
       navigate("/courts", { replace: true });
+      return;
     }
     // try to pre-populate some fields if user exists
     if (user?.name) setCardName(user.name);
-    // eslint-disable-next-line
-  }, []);
+  }, [bookingPayload, user, navigate]);
 
   function resetErrors() {
     setError("");
@@ -72,15 +73,31 @@ export default function PaymentPage() {
       setError("Enter your UPI VPA (e.g. yourname@bank).");
       return false;
     }
-    if (!/^[\w.\-\]{2,}@[a-zA-Z]{2,}$/.test(vpa)) {
+    // fixed regex: allow letters/digits/dot/hyphen/underscore before @ and letters after
+    if (!/^[\w.\-]{2,}@[a-zA-Z]{2,}$/.test(vpa)) {
       setError("UPI VPA looks invalid (mock validation).");
       return false;
     }
-    // optional txnId check when "I paid" confirmation used
     return true;
   }
 
-  // Unified function to call backend to create booking (paymentMeta included)
+  /*
+    Use either your api instance (if imported) or fallback to axios instance.
+    If api is a pre-configured axios instance with baseURL + auth interceptors, preferred.
+  */
+  const http = (function () {
+    if (api && typeof api.post === "function") {
+      return api;
+    }
+    // fallback axios instance with baseURL from env
+    return axios.create({ baseURL: process.env.REACT_APP_API_BASE || "" });
+  })();
+
+  /**
+   * Create booking on server.
+   * - paymentMeta is an object like { method: 'card', paid: true, details: {...} }
+   * - navigates to /my-bookings on success
+   */
   async function createBookingOnServer(paymentMeta = {}) {
     if (!bookingPayload) {
       setError("Missing booking data.");
@@ -88,13 +105,52 @@ export default function PaymentPage() {
     }
     setLoading(true);
     setError("");
-    try {
-     
 
-     
-      // success -> navigate to my-bookings
+    try {
+      // Prepare the request body - adapt shape to your backend if needed
+      const body = {
+        courtId: bookingPayload.court?._id || bookingPayload.courtId || bookingPayload.court,
+        startTime: bookingPayload.startTime,
+        endTime: bookingPayload.endTime,
+        pricingBreakdown: bookingPayload.pricingBreakdown || {},
+        // include user id if needed by server; many servers derive from token
+        userId: bookingPayload.userId || user?.id || user?._id || null,
+        payment: paymentMeta,
+        meta: bookingPayload.meta || {}
+      };
+
+      // endpoint - change if your backend uses /api/bookings or similar
+      const endpoint = "/bookings";
+
+      // Prepare headers. If your imported `api` instance already handles auth, you don't need to add Authorization header.
+      const headers = {
+        "Content-Type": "application/json"
+      };
+      if (!api || typeof api.post !== "function") {
+        // If using fallback axios (not the api instance) add bearer if available
+        if (user?.token) {
+          headers.Authorization = `Bearer ${user.token}`;
+        }
+      }
+      // execute request
+      const res = await http.post(endpoint, body, { headers });
+
+      // Success statuses often 201 or 200
+      if (res.status === 201 || res.status === 200) {
+        setLoading(false);
+
+        // Optionally: you can pass newly created booking to MyBookings via state
+        // navigate('/my-bookings', { replace: true, state: { createdBooking: res.data } });
+
+        // Or just navigate and let MyBookings fetch fresh data
+        navigate("/my-bookings", { replace: true });
+        return;
+      }
+
+      // unexpected response
       setLoading(false);
-      navigate("/my-bookings", { replace: true });
+      setError("Booking failed: unexpected server response.");
+      console.error("Unexpected booking response:", res);
     } catch (err) {
       setLoading(false);
       const body = err?.response?.data;
@@ -111,7 +167,6 @@ export default function PaymentPage() {
     // Simulate tokenization delay
     setLoading(true);
     setTimeout(async () => {
-      // simulate success
       await createBookingOnServer({
         method: "card",
         paid: true,
@@ -124,17 +179,14 @@ export default function PaymentPage() {
   async function handlePayUPI() {
     resetErrors();
     if (!validateUPI()) return;
-    // Option A: If you want to simulate immediate success, uncomment and call createBookingOnServer here
-    // For better UX, we'll request user to click "I have paid" (txnId optional) and then confirm.
+    // We'll rely on confirmUPIPayment for actual booking creation (user clicks "I have paid").
     setLoading(false);
   }
 
   // Called when user confirms they completed UPI payment (manual simulation)
   async function confirmUPIPayment() {
     resetErrors();
-    if (!txnId) {
-      // allow empty txnId but show warning? we'll allow
-    }
+    // allow empty txnId; not strict here
     await createBookingOnServer({
       method: "upi",
       paid: true,
@@ -149,10 +201,13 @@ export default function PaymentPage() {
 
   // Netbank/wallet placeholder handlers
   async function handleBankOrWalletPay() {
-    // Just simulate success
     setLoading(true);
     setTimeout(async () => {
-      await createBookingOnServer({ method: bank ? "netbank" : wallet ? "wallet" : "netbank", paid: true, details: { bank, wallet } });
+      await createBookingOnServer({
+        method: bank ? "netbank" : wallet ? "wallet" : "netbank",
+        paid: true,
+        details: { bank, wallet }
+      });
     }, 800);
   }
 
@@ -183,9 +238,12 @@ export default function PaymentPage() {
               </label>
             </div>
 
-            <div className="mt-4">
-              <button onClick={handlePayCard} disabled={loading} className="w-full bg-emerald-600 text-white rounded py-2 px-3 hover:brightness-95">
+            <div className="mt-3 flex gap-2">
+              <button onClick={handlePayCard} disabled={loading} className="flex-1 bg-emerald-600 text-white rounded py-2">
                 {loading ? "Processing..." : `Pay ${formatINR(total)} with Card`}
+              </button>
+              <button onClick={handleSkip} disabled={loading} className="flex-1 bg-gray-200 text-gray-800 rounded py-2">
+                  Skip & Book
               </button>
             </div>
           </>
@@ -315,7 +373,6 @@ export default function PaymentPage() {
           <aside className="bg-white rounded shadow p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-16 h-16 rounded bg-gray-200 flex items-center justify-center">
-                {/* optional image if available */}
                 <img src={bookingPayload?.court?.image || "/images/stadium-placeholder.jpg"} alt="court" className="w-full h-full object-cover rounded" />
               </div>
               <div>

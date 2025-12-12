@@ -1,6 +1,7 @@
 // controllers/bookingController.js
 const mongoose = require('mongoose');
 const Booking = mongoose.model('Booking');
+const Court = mongoose.model('Court');           // <- added
 const Equipment = mongoose.model('Equipment');
 const Coach = mongoose.model('Coach');
 const { calculatePricing } = require('../utils/priceCalculator');
@@ -15,8 +16,8 @@ async function isEquipmentAvailable(equipmentRequests = [], startTime, endTime, 
 
     const objectId = new mongoose.Types.ObjectId(eqId);
 
-    // aggregate booked quantities overlapping
-    const agg = await Booking.aggregate([
+    // Build aggregate pipeline
+    const pipeline = [
       { $match: {
           status: 'confirmed',
           startTime: { $lt: new Date(endTime) },
@@ -26,7 +27,15 @@ async function isEquipmentAvailable(equipmentRequests = [], startTime, endTime, 
       { $unwind: '$resources.equipment' },
       { $match: { 'resources.equipment.equipmentId': objectId } },
       { $group: { _id: null, used: { $sum: '$resources.equipment.quantity' } } }
-    ]).session ? await Booking.aggregate([/*same*/]) : agg; // avoid session problems
+    ];
+
+    // Run aggregate, attach session if provided
+    let aggQuery = Booking.aggregate(pipeline);
+    if (session) {
+      // Mongoose aggregate supports .session()
+      aggQuery = aggQuery.session(session);
+    }
+    const agg = await aggQuery.exec();
 
     const used = agg.length ? agg[0].used : 0;
     const equipment = await Equipment.findById(eqId).session(session);
@@ -107,6 +116,20 @@ async function createBooking({ userId, courtId, startTime, endTime, equipmentReq
     });
 
     await bookingDoc.save({ session });
+
+    // --- Safe and tiny update to the Court record so the court doc is touched in DB
+    // This does not remove any functionality: it's a small metadata timestamp to indicate
+    // the court had a recent booking. It helps invalidate caches/CDNs that might rely on
+    // last-modified, and gives frontends an easy field to check if needed.
+    try {
+      await Court.updateOne(
+        { _id: courtId },
+        { $set: { 'metadata.lastBookingAt': new Date() } }
+      ).session(session);
+    } catch (e) {
+      // don't fail the booking if this update has issues; log and continue
+      console.error('Failed to update court metadata timestamp', e && e.message ? e.message : e);
+    }
 
     await session.commitTransaction();
     session.endSession();

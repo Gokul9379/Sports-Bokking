@@ -17,7 +17,7 @@ export default function BookingForm() {
   const incomingSlot = location.state?.slot || null;
   const courtFromState = location.state?.court || null;
 
-  // NOTE: fixed syntax here (no stray parens)
+  // fixed slot fallback
   const [slotState] = useState(() => {
     if (incomingSlot) return incomingSlot;
     const now = new Date();
@@ -42,7 +42,7 @@ export default function BookingForm() {
   const [selectedCoach, setSelectedCoach] = useState("");
   const [pricePreview, setPricePreview] = useState(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
-  const [loadingSubmit] = useState(false);
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
 
   const [equipmentFee, setEquipmentFee] = useState(0);
   const [coachFee, setCoachFee] = useState(0);
@@ -138,20 +138,20 @@ export default function BookingForm() {
     }
   }
 
-  
-
-  // inside BookingForm.js - replace submitBooking function with this:
+  // submitBooking now uses the backend shape: equipmentRequests + coachId
+  // inside BookingForm.js - replace existing submitBooking with this
 async function submitBooking() {
-  if (!user) { navigate("/login", { state: { from: window.location.pathname } }); return; }
+  if (!user) {
+    navigate("/login", { state: { from: window.location.pathname } });
+    return;
+  }
 
+  setLoadingSubmit(true);
+
+  // build equipmentRequests array as expected by backend
   const equipmentArray = Array.isArray(selectedEquipment)
-    ? selectedEquipment.map(s => ({ equipmentId: s.equipmentId, quantity: Number(s.quantity || 1) }))
+    ? selectedEquipment.map((s) => ({ equipmentId: s.equipmentId, quantity: Number(s.quantity || 1) }))
     : [];
-
-  const resourcesPayload = {
-    equipment: equipmentArray,
-    coach: selectedCoach || null
-  };
 
   const baseForPayload = Number(pricePreview?.basePrice ?? court?.basePrice ?? 0);
   const ruleAdjustmentsForPayload = pricePreview?.ruleAdjustments ?? [];
@@ -162,7 +162,6 @@ async function submitBooking() {
 
   const pricingBreakdownPayload = {
     basePrice: Number(baseForPayload),
-    // keep the priceAfterRules if present
     priceAfterRules: Number(pricePreview?.priceAfterRules ?? pricePreview?.basePrice ?? court?.basePrice ?? 0),
     ruleAdjustments: Array.isArray(ruleAdjustmentsForPayload) ? ruleAdjustmentsForPayload : [],
     equipmentFee: Number(equipmentFee || 0),
@@ -170,17 +169,42 @@ async function submitBooking() {
     total: Number(calc || 0)
   };
 
+  // start building payload
   const payload = {
-    userId: user.id || user._id,
+    userId: user._id || user.id,
     courtId,
     startTime: activeSlot.startISO,
     endTime: activeSlot.endISO,
-    resources: resourcesPayload,
-    pricingBreakdown: pricingBreakdownPayload
+    equipmentRequests: equipmentArray
+    // note: do NOT include coachId when not selected
   };
 
-  // navigate to payment page with payload
-  navigate("/payment", { state: { bookingPayload: payload } });
+  // only add coachId key if a coach was selected (truthy string)
+  if (selectedCoach) {
+    payload.coachId = selectedCoach;
+  }
+
+  // attach pricingBreakdown optionally (your backend accepts it but doesn't require it)
+  payload.pricingBreakdown = pricingBreakdownPayload;
+
+  // debug: see payload in console before POST
+  console.log("Booking payload:", payload);
+
+  try {
+    const res = await api.post("/bookings", payload);
+    alert("Booking successful");
+    navigate("/my-bookings");
+  } catch (err) {
+    console.error("Booking failed:", err);
+    const msg =
+      err?.response?.data?.error ||
+      (err?.response?.data && JSON.stringify(err.response.data)) ||
+      err?.message ||
+      "Booking failed";
+    alert(msg);
+  } finally {
+    setLoadingSubmit(false);
+  }
 }
 
 
