@@ -71,24 +71,39 @@ router.get('/user/:userId', requireAuth(), [param('userId').isMongoId()], async 
 });
 
 // cancel booking
-router.delete('/:id', requireAuth(), [param('id').isMongoId()], async (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-  const requester = req.user;
-  if (!requester) return res.status(401).json({ error: 'Authentication required' });
+// routes/bookings.js  — replace existing DELETE handler with this
 
-  try {
-    const booking = await Booking.findById(req.params.id);
-    if (!booking) return res.status(404).json({ error: 'Booking not found' });
+router.delete(
+  '/:id',
+  requireAuth(),             // authentication middleware (returns a function)
+  param('id').isMongoId(),   // validator middleware (pass directly, not inside an array)
+  async (req, res) => {
+    // collect validation errors (if any)
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    if (requester.role !== 'admin' && booking.user.toString() !== requester.id) return res.status(403).json({ error: 'Access denied' });
+    const requester = req.user;
+    if (!requester) return res.status(401).json({ error: 'Authentication required' });
 
-    booking.status = 'cancelled';
-    await booking.save();
-    res.json({ message: 'Booking cancelled', booking });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    try {
+      const booking = await Booking.findById(req.params.id);
+      if (!booking) return res.status(404).json({ error: 'Booking not found' });
+
+      // permission check: either admin or owner can delete
+      if (requester.role !== 'admin' && booking.user.toString() !== requester.id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      // physically delete the booking document from DB
+      await Booking.deleteOne({ _id: booking._id });
+
+      res.json({ message: 'Booking deleted' });
+    } catch (err) {
+      console.error('DELETE /bookings/:id error', err);
+      res.status(500).json({ error: err.message || 'Server error' });
+    }
   }
-});
+);
+
 
 module.exports = router;

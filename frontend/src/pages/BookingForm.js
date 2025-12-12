@@ -140,72 +140,58 @@ export default function BookingForm() {
 
   // submitBooking now uses the backend shape: equipmentRequests + coachId
   // inside BookingForm.js - replace existing submitBooking with this
+// inside BookingForm.js (replace your existing submitBooking)
 async function submitBooking() {
   if (!user) {
     navigate("/login", { state: { from: window.location.pathname } });
     return;
   }
 
-  setLoadingSubmit(true);
-
-  // build equipmentRequests array as expected by backend
+  // Build equipmentRequests array (as backend expects)
   const equipmentArray = Array.isArray(selectedEquipment)
-    ? selectedEquipment.map((s) => ({ equipmentId: s.equipmentId, quantity: Number(s.quantity || 1) }))
+    ? selectedEquipment.map(s => ({ equipmentId: s.equipmentId, quantity: Number(s.quantity || 1) }))
     : [];
 
-  const baseForPayload = Number(pricePreview?.basePrice ?? court?.basePrice ?? 0);
-  const ruleAdjustmentsForPayload = pricePreview?.ruleAdjustments ?? [];
+  // Only include coachId if one is selected (do NOT send null)
+  const coachIdToSend = selectedCoach ? selectedCoach : undefined;
 
-  const calc = Number.isFinite(Number(grandTotal))
+  // Pricing (you may send pricingBreakdown to DB but backend validation doesn't require it;
+  // keep it as optional metadata if you want - but backend route validators will ignore unknown fields)
+  const baseForPayload = Number(pricePreview?.basePrice ?? court?.basePrice ?? 0);
+  const priceAfterRules = Number(pricePreview?.priceAfterRules ?? pricePreview?.basePrice ?? court?.basePrice ?? 0);
+
+  const calcTotal = Number.isFinite(Number(grandTotal))
     ? Number(grandTotal)
     : Number(baseForPayload) + Number(equipmentFee || 0) + Number(coachFee || 0);
 
-  const pricingBreakdownPayload = {
-    basePrice: Number(baseForPayload),
-    priceAfterRules: Number(pricePreview?.priceAfterRules ?? pricePreview?.basePrice ?? court?.basePrice ?? 0),
-    ruleAdjustments: Array.isArray(ruleAdjustmentsForPayload) ? ruleAdjustmentsForPayload : [],
-    equipmentFee: Number(equipmentFee || 0),
-    coachFee: Number(coachFee || 0),
-    total: Number(calc || 0)
+  const bookingMeta = {
+    pricingBreakdown: {
+      basePrice: baseForPayload,
+      priceAfterRules,
+      ruleAdjustments: Array.isArray(pricePreview?.ruleAdjustments) ? pricePreview.ruleAdjustments : [],
+      equipmentFee: Number(equipmentFee || 0),
+      coachFee: Number(coachFee || 0),
+      total: Number(calcTotal || 0)
+    }
   };
 
-  // start building payload
-  const payload = {
-    userId: user._id || user.id,
+  // Build the payload that backend expects
+  const payloadForBackend = {
+    userId: user.id || user._id,
     courtId,
     startTime: activeSlot.startISO,
     endTime: activeSlot.endISO,
-    equipmentRequests: equipmentArray
-    // note: do NOT include coachId when not selected
+    equipmentRequests: equipmentArray,
+    // only include coachId if set
+    ...(coachIdToSend ? { coachId: coachIdToSend } : {}),
+    // keep pricing meta to store for record (optional)
+    ...bookingMeta
   };
 
-  // only add coachId key if a coach was selected (truthy string)
-  if (selectedCoach) {
-    payload.coachId = selectedCoach;
-  }
-
-  // attach pricingBreakdown optionally (your backend accepts it but doesn't require it)
-  payload.pricingBreakdown = pricingBreakdownPayload;
-
-  // debug: see payload in console before POST
-  console.log("Booking payload:", payload);
-
-  try {
-    const res = await api.post("/bookings", payload);
-    alert("Booking successful");
-    navigate("/my-bookings");
-  } catch (err) {
-    console.error("Booking failed:", err);
-    const msg =
-      err?.response?.data?.error ||
-      (err?.response?.data && JSON.stringify(err.response.data)) ||
-      err?.message ||
-      "Booking failed";
-    alert(msg);
-  } finally {
-    setLoadingSubmit(false);
-  }
+  // Navigate to payment page with prepared payload
+  navigate("/payment", { state: { bookingPayload: payloadForBackend } });
 }
+
 
 
   return (
